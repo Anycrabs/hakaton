@@ -3,11 +3,12 @@
     build:
       context: .
       dockerfile: Dockerfile.api
+    working_dir: /app
     environment:
       - MODEL_PATH=/app/model_store/model.pkl
     volumes:
       - ./model_store:/app/model_store
-      - ./data:/app/income_service/data:ro
+      - ./data:/app/data:ro
     ports:
       - "8000:8000"
 
@@ -16,13 +17,14 @@
     build:
       context: .
       dockerfile: Dockerfile.api
-    command: ["python", "-m", "income_service.ml.train"]
+    working_dir: /app
+    command: ["python", "-m", "ml.train"]
     environment:
       - MODEL_PATH=/app/model_store/model.pkl
       - PLOT_PATH=/app/model_store/feature_importance.png
     volumes:
       - ./model_store:/app/model_store
-      - ./data:/app/income_service/data:ro
+      - ./data:/app/data:ro
 
   frontend:
     build:
