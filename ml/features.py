@@ -17,7 +17,13 @@ WEIGHT_COL = "sample_weight"
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 TRAIN_PATH = DATA_DIR / "hackathon_income_train.csv"
 TEST_PATH = DATA_DIR / "hackathon_income_test.csv"
-CSV_READ_KWARGS = {"sep": ";", "encoding": "cp1251"}
+CSV_READ_KWARGS = {
+    "sep": ";",
+    "encoding": "cp1251",
+    "encoding_errors": "replace",
+    "low_memory": False,
+    "engine": "python",
+}
 
 
 def get_column_types(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
@@ -72,12 +78,19 @@ def prepare_xy(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, Optional[pd.S
     return X, y, weight
 
 
+def _read_csv_safe(path: Path) -> pd.DataFrame:
+    try:
+        return pd.read_csv(path, **CSV_READ_KWARGS)
+    except UnicodeDecodeError:
+        return pd.read_csv(path, sep=";", encoding="latin1", low_memory=False, engine="python")
+
+
 def load_train() -> pd.DataFrame:
-    return pd.read_csv(TRAIN_PATH, **CSV_READ_KWARGS)
+    return _read_csv_safe(TRAIN_PATH)
 
 
 def load_test() -> pd.DataFrame:
-    return pd.read_csv(TEST_PATH, **CSV_READ_KWARGS)
+    return _read_csv_safe(TEST_PATH)
 
 
 def train_with_cv(df: pd.DataFrame, n_splits: int = 5):

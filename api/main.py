@@ -5,9 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from typing import List
 import pandas as pd
-from income_service.ml.inference import load_model, predict_income
-from income_service.ml.explain import get_feature_importance
-from income_service.ml.features import TRAIN_PATH
+from ml.inference import load_model, predict_income
+from ml.explain import get_feature_importance
+from ml.features import TRAIN_PATH, _read_csv_safe
 from .models import ClientRequest, PredictionResponse, FeatureImportanceItem
 from .recommender import recommend_products
 
@@ -33,7 +33,7 @@ FEATURE_IMPORTANCE: List[dict] = []
 def startup_event():
     global MODEL, FEATURE_NAMES, FEATURE_IMPORTANCE
     MODEL = load_model(MODEL_PATH)
-    ref = pd.read_csv(TRAIN_PATH)
+    ref = _read_csv_safe(TRAIN_PATH)
     pre = MODEL.named_steps["preprocess"]
     FEATURE_NAMES = pre.get_feature_names_out().tolist()
     FEATURE_IMPORTANCE = get_feature_importance(

@@ -3,7 +3,7 @@ import pickle
 import pandas as pd
 from pathlib import Path
 from typing import Any, Dict, List
-from .features import TRAIN_PATH, TARGET_COL, WEIGHT_COL, ID_COL, CSV_READ_KWARGS
+from .features import TRAIN_PATH, TARGET_COL, WEIGHT_COL, ID_COL, _read_csv_safe
 
 DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "model.pkl"
 MODEL_PATH = Path(os.getenv("MODEL_PATH", DEFAULT_MODEL_PATH))
@@ -15,7 +15,7 @@ def load_model(model_path: Path = MODEL_PATH):
 
 
 def _reference_columns() -> List[str]:
-    ref = pd.read_csv(TRAIN_PATH, **CSV_READ_KWARGS)
+    ref = _read_csv_safe(TRAIN_PATH)
     return [c for c in ref.columns if c not in {TARGET_COL, WEIGHT_COL, ID_COL}]
 
 
