@@ -1,7 +1,7 @@
 ﻿import pandas as pd
 from pathlib import Path
 from typing import List, Tuple, Optional
-from sklearn.model_selection import KFold, cross_val_score
+from sklearn.model_selection import KFold
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -19,9 +19,8 @@ TRAIN_PATH = DATA_DIR / "hackathon_income_train.csv"
 TEST_PATH = DATA_DIR / "hackathon_income_test.csv"
 CSV_READ_KWARGS = {
     "sep": ";",
-    "encoding": "cp1251",
+    "encoding": "latin1",
     "encoding_errors": "replace",
-    "low_memory": False,
     "engine": "python",
 }
 
@@ -70,8 +69,11 @@ def build_pipeline(preprocessor: ColumnTransformer, model: XGBRegressor) -> Pipe
 
 
 def prepare_xy(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, Optional[pd.Series]]:
-    weight = df[WEIGHT_COL] if WEIGHT_COL in df.columns else None
-    y = df[TARGET_COL]
+    def coerce_numeric(series: pd.Series) -> pd.Series:
+        return pd.to_numeric(series.astype(str).str.replace(",", ".", regex=False), errors="coerce")
+
+    weight = coerce_numeric(df[WEIGHT_COL]) if WEIGHT_COL in df.columns else None
+    y = coerce_numeric(df[TARGET_COL])
     exclude_cols = {TARGET_COL, WEIGHT_COL, ID_COL}
     feature_cols = [c for c in df.columns if c not in exclude_cols]
     X = df[feature_cols]
@@ -79,10 +81,7 @@ def prepare_xy(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, Optional[pd.S
 
 
 def _read_csv_safe(path: Path) -> pd.DataFrame:
-    try:
-        return pd.read_csv(path, **CSV_READ_KWARGS)
-    except UnicodeDecodeError:
-        return pd.read_csv(path, sep=";", encoding="latin1", low_memory=False, engine="python")
+    return pd.read_csv(path, **CSV_READ_KWARGS)
 
 
 def load_train() -> pd.DataFrame:
@@ -99,10 +98,25 @@ def train_with_cv(df: pd.DataFrame, n_splits: int = 5):
     preprocessor = build_preprocessor(cat_cols, num_cols)
     model = build_model()
     pipeline = build_pipeline(preprocessor, model)
-    scorer = make_scorer(wmae, greater_is_better=False)
     cv = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-    fit_params = {"model__sample_weight": weight} if weight is not None else None
-    scores = cross_val_score(pipeline, X, y, cv=cv, scoring=scorer, fit_params=fit_params)
+
+    scores = []
+    for fold, (train_idx, val_idx) in enumerate(cv.split(X, y), start=1):
+        X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+        if weight is not None:
+            w_train = weight.iloc[train_idx]
+            w_val = weight.iloc[val_idx]
+            pipeline.fit(X_train, y_train, model__sample_weight=w_train)
+            pred = pipeline.predict(X_val)
+            score = -wmae(y_val, pred, sample_weight=w_val)
+        else:
+            pipeline.fit(X_train, y_train)
+            pred = pipeline.predict(X_val)
+            score = -wmae(y_val, pred)
+        scores.append(score)
+        print(f"[CV] Fold {fold}/{n_splits} done, WMAE={-score:.4f}")
+
     if weight is not None:
         pipeline.fit(X, y, model__sample_weight=weight)
     else:

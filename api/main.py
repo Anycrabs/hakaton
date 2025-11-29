@@ -7,7 +7,7 @@ from typing import List
 import pandas as pd
 from ml.inference import load_model, predict_income
 from ml.explain import get_feature_importance
-from ml.features import TRAIN_PATH, _read_csv_safe
+from ml.features import TRAIN_PATH, _read_csv_safe, CSV_READ_KWARGS
 from .models import ClientRequest, PredictionResponse, FeatureImportanceItem
 from .recommender import recommend_products
 
