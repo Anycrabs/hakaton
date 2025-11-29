@@ -1,0 +1,133 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Прогноз дохода</title>
+  <style>
+    :root { --bg:#0b1d33; --card:#0f2742; --accent:#33d1b2; --text:#eef3fb; --muted:#9eb6d1; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: 'Segoe UI', sans-serif; background: radial-gradient(circle at 20% 20%, #133459, #0b1d33 55%); color: var(--text); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 18px 60px; }
+    header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+    h1 { margin:0; letter-spacing:0.5px; }
+    .pill { padding:8px 14px; border-radius:999px; background: rgba(51, 209, 178, 0.15); color: var(--accent); border:1px solid rgba(51,209,178,0.35); }
+    .grid { display:grid; gap:14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .card { background: var(--card); border:1px solid rgba(255,255,255,0.04); border-radius:14px; padding:18px; box-shadow: 0 12px 32px rgba(0,0,0,0.25); }
+    label { display:block; font-weight:600; margin-bottom:6px; color: var(--muted); font-size:13px; letter-spacing:0.2px; }
+    input, select { width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.08); background:#0b1d33; color: var(--text); outline:none; font-size:15px; }
+    button { width:100%; background: linear-gradient(135deg, var(--accent), #2ab2a0); border:none; color:#05212a; font-weight:700; padding:12px; border-radius:12px; cursor:pointer; margin-top:8px; font-size:15px; box-shadow: 0 10px 30px rgba(51,209,178,0.35); }
+    button:hover { transform: translateY(-1px); box-shadow: 0 12px 36px rgba(51,209,178,0.45); }
+    .result { font-size:34px; font-weight:800; margin:6px 0 2px; }
+    .sub { color: var(--muted); font-size:13px; }
+    table { width:100%; border-collapse: collapse; margin-top:6px; }
+    th, td { padding:8px 6px; border-bottom:1px solid rgba(255,255,255,0.06); text-align:left; font-size:14px; }
+    th { color: var(--muted); font-weight:600; letter-spacing:0.3px; }
+    ul { list-style:none; padding:0; margin:0; display:grid; gap:10px; }
+    .product { border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:10px 12px; background:#0c2138; }
+    .product strong { color: var(--accent); }
+    .error { color: #ff9f9f; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>AI прогноз дохода</h1>
+      <div class="pill">Inference API · /predict_income</div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Данные клиента</h3>
+        <form id="client-form">
+          <label>Возраст</label>
+          <input type="number" name="age" value=35 min="18" required />
+          <label>Тип занятости</label>
+          <select name="employment_type">
+            <option value="salaried">Наемный</option>
+            <option value="self_employed">Самозанятый</option>
+            <option value="business_owner">Бизнес</option>
+          </select>
+          <label>Кредитный рейтинг</label>
+          <input type="number" name="credit_score" value=720 min="300" max="900" required />
+          <label>Сбережения</label>
+          <input type="number" name="savings_balance" value=15000 min="0" step="100" />
+          <label>Город</label>
+          <input type="text" name="city" value=Moscow />
+          <label>Иждивенцы</label>
+          <input type="number" name="dependents" value=1 min="0" />
+          <button type="submit">Рассчитать доход</button>
+        </form>
+        <div id="error" class="error"></div>
+      </div>
+
+      <div class="card">
+        <h3>Прогноз</h3>
+        <div class="result" id="predicted-income">—</div>
+        <div class="sub">руб./мес</div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:14px;">
+      <div class="card">
+        <h3>Топ признаки</h3>
+        <table>
+          <thead><tr><th>Признак</th><th>Вклад</th></tr></thead>
+          <tbody id="importance-body"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Рекомендации</h3>
+        <ul id="products"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('client-form');
+    const incomeEl = document.getElementById('predicted-income');
+    const importanceBody = document.getElementById('importance-body');
+    const productsList = document.getElementById('products');
+    const errorEl = document.getElementById('error');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.textContent = '';
+      incomeEl.textContent = 'Считаем...';
+      importanceBody.innerHTML = '';
+      productsList.innerHTML = '';
+
+      const formData = new FormData(form);
+      const payload = Object.fromEntries(formData.entries());
+      for (const k of Object.keys(payload)) {
+        const val = payload[k];
+        payload[k] = isNaN(val) || val === '' ? val : Number(val);
+      }
+
+      try {
+        const res = await fetch('http://localhost:8000/predict_income', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('API error ' + res.status);
+        const data = await res.json();
+        incomeEl.textContent = Math.round(data.predicted_income).toLocaleString('ru-RU');
+        (data.feature_importance || []).forEach(item => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${item.feature}</td><td>${item.importance.toFixed(4)}</td>`;
+          importanceBody.appendChild(tr);
+        });
+        (data.recommended_products || []).forEach(p => {
+          const li = document.createElement('li');
+          li.className = 'product';
+          li.innerHTML = `<strong>${p.name}</strong><div class='sub'>${p.description}</div><div>${p.reason}</div>`;
+          productsList.appendChild(li);
+        });
+      } catch (err) {
+        incomeEl.textContent = '—';
+        errorEl.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>

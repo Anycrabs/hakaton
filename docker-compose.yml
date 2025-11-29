@@ -1,0 +1,38 @@
+﻿services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      - MODEL_PATH=/app/model_store/model.pkl
+    volumes:
+      - ./model_store:/app/model_store
+      - ./data:/app/income_service/data:ro
+    ports:
+      - "8000:8000"
+
+  trainer:
+    profiles: ["train"]
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: ["python", "-m", "income_service.ml.train"]
+    environment:
+      - MODEL_PATH=/app/model_store/model.pkl
+      - PLOT_PATH=/app/model_store/feature_importance.png
+    volumes:
+      - ./model_store:/app/model_store
+      - ./data:/app/income_service/data:ro
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+networks:
+  default:
+    name: income_net
